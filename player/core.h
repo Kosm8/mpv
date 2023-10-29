@@ -281,6 +281,11 @@ typedef struct MPContext {
     int quit_custom_rc;
     bool has_quit_custom_rc;
 
+    // True if exiting the process, allows to skip some cleanup steps
+    // Note that leak checkers may complain about this, so they have to be
+    // configured appropriately.
+    bool quit_fast;
+
     // Global file statistics
     int files_played;       // played without issues (even if stopped by user)
     int files_errored;      // played, but errors happened at one point
