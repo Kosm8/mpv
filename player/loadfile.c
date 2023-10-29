@@ -144,7 +144,8 @@ static void kill_demuxers_reentrant(struct MPContext *mpctx,
             // Make sure it is set if it wasn't yet.
             demux_set_wakeup_cb(d, wakeup_demux, mpctx);
 
-            struct demux_free_async_state *item = demux_free_async(d);
+            struct demux_free_async_state *item =
+                demux_free_async(d, mpctx->quit_fast && mpctx->stop_play == PT_QUIT);
             if (item) {
                 MP_TARRAY_APPEND(NULL, items, num_items, item);
                 d = NULL;
