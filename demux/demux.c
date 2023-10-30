@@ -169,6 +169,7 @@ struct demux_internal {
     bool thread_terminate;
     bool threading;
     bool shutdown_async;
+	bool shutdown_fast;
     void (*wakeup_cb)(void *ctx);
     void *wakeup_cb_ctx;
 
@@ -1082,14 +1083,20 @@ static void demux_shutdown(struct demux_internal *in)
     demuxer->priv = NULL;
     in->d_thread->priv = NULL;
 
-    demux_flush(demuxer);
-    assert(in->total_bytes == 0);
+    // Intentionally leak demuxer cache to avoid long and unnecessary
+    // deallocation of possibly hundreds of thousands of cached packets when
+    // exiting the player. Note that leak checkers may complain about this, so
+    // they have to be configured appropriately.
+    if (!in->shutdown_fast) {
+        demux_flush(demuxer);
+        assert(in->total_bytes == 0);
 
-    in->current_range = NULL;
-    free_empty_cached_ranges(in);
+        in->current_range = NULL;
+        free_empty_cached_ranges(in);
 
-    talloc_free(in->cache);
-    in->cache = NULL;
+        talloc_free(in->cache);
+        in->cache = NULL;
+    }
 
     if (in->owns_stream)
         free_stream(demuxer->stream);
@@ -1124,7 +1131,7 @@ void demux_free(struct demuxer *demuxer)
 // the wakeup callback).
 // This can return NULL. Then the demuxer cannot be free'd asynchronously, and
 // you need to call demux_free() instead.
-struct demux_free_async_state *demux_free_async(struct demuxer *demuxer)
+struct demux_free_async_state *demux_free_async(struct demuxer *demuxer, bool fast)
 {
     struct demux_internal *in = demuxer->in;
     assert(demuxer == in->d_user);
@@ -1135,6 +1142,7 @@ struct demux_free_async_state *demux_free_async(struct demuxer *demuxer)
     pthread_mutex_lock(&in->lock);
     in->thread_terminate = true;
     in->shutdown_async = true;
+	in->shutdown_fast = fast;
     pthread_cond_signal(&in->wakeup);
     pthread_mutex_unlock(&in->lock);
 
