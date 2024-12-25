@@ -416,7 +416,8 @@ if features['cocoa']
     sources += files('osdep/language-mac.c',
                      'osdep/path-mac.m',
                      'osdep/utils-mac.c',
-                     'osdep/mac/app_bridge.m')
+                     'osdep/mac/app_bridge.m',
+                     'player/clipboard/clipboard-mac.m')
     main_fn_source = files('osdep/main-fn-mac.c')
 endif
 
@@ -947,7 +948,7 @@ if features['direct3d']
     sources += files('video/out/vo_direct3d.c')
 endif
 
-drm = dependency('libdrm', version: '>= 2.4.105', required: get_option('drm'))
+drm = dependency('libdrm', version: '>= 2.4.109', required: get_option('drm'))
 libdisplay_info = dependency('libdisplay-info', version: '>= 0.1.1', required: get_option('drm'))
 features += {'drm': drm.found() and libdisplay_info.found() and
              (features['vt.h'] or features['consio.h'] or features['wsdisplay-usl-io.h'])}
@@ -1568,6 +1569,7 @@ swift_sources = []
 if features['cocoa'] and features['swift']
     swift_sources += files('osdep/mac/application.swift',
                            'osdep/mac/app_hub.swift',
+                           'osdep/mac/clipboard.swift',
                            'osdep/mac/event_helper.swift',
                            'osdep/mac/input_helper.swift',
                            'osdep/mac/libmpv_helper.swift',

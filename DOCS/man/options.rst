@@ -2655,7 +2655,7 @@ Subtitles
     default. This also disables libass' incompatible extensions. This currently
     includes bracket pair matching according to the revised Unicode
     Bidirectional Algorithm introduced in Unicode 6.3, and also affects how BiDi
-    runs are split and processed, as well as soft linewrapping of unicode text.
+    runs are split and processed, as well as soft linewrapping of Unicode text.
 
     This affects plaintext (non-ASS) subtitles only. Default: no.
 
@@ -7835,13 +7835,13 @@ Miscellaneous
     Conversion is not applied to metadata that is updated at runtime.
 
 ``--clipboard-enable=<yes|no>``
-    (Windows and Wayland only)
+    (Windows, Wayland and macOS only)
 
     Enable native clipboard support (default: yes). This allows reading and
     writing to the ``clipboard`` property to get and set clipboard contents.
 
 ``--clipboard-monitor=<yes|no>``
-    (Windows only)
+    (Windows and macOS only)
 
     Enable clipboard monitoring so that the ``clipboard`` property can be
     observed for content changes (default: no). This only affects clipboard
