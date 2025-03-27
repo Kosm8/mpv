@@ -271,7 +271,7 @@ static void queue_remove(struct cmd_queue *queue, struct mp_cmd *cmd)
         p_prev = &(*p_prev)->queue_next;
     }
     // if this fails, cmd was not in the queue
-    assert(*p_prev == cmd);
+    mp_assert(*p_prev == cmd);
     *p_prev = cmd->queue_next;
 }
 
@@ -775,6 +775,8 @@ static void feed_key(struct input_ctx *ictx, int code, double scale,
         mp_cmd_t *cmd = get_cmd_from_keys(ictx, (bstr){0}, code);
         if (!cmd)  // queue dummy cmd so that mouse-pos can notify observers
             cmd = mp_input_parse_cmd(ictx, bstr0("ignore"), "<internal>");
+        if (cmd)
+            cmd->notify_event = true;
         queue_cmd(ictx, cmd);
         return;
     }
@@ -887,7 +889,7 @@ bool mp_input_vo_keyboard_enabled(struct input_ctx *ictx)
     return r;
 }
 
-static void set_mouse_pos(struct input_ctx *ictx, int x, int y)
+static void set_mouse_pos(struct input_ctx *ictx, int x, int y, bool quiet)
 {
     MP_TRACE(ictx, "mouse move %d/%d\n", x, y);
 
@@ -909,7 +911,8 @@ static void set_mouse_pos(struct input_ctx *ictx, int x, int y)
         MP_TRACE(ictx, "-> %d/%d\n", x, y);
     }
 
-    ictx->mouse_event_counter++;
+    if (!quiet)
+        ictx->mouse_event_counter++;
     ictx->mouse_vo_x = x;
     ictx->mouse_vo_y = y;
 
@@ -920,6 +923,7 @@ static void set_mouse_pos(struct input_ctx *ictx, int x, int y)
 
     if (cmd) {
         cmd->mouse_move = true;
+        cmd->notify_event = true;
         cmd->mouse_x = x;
         cmd->mouse_y = y;
         if (should_drop_cmd(ictx, cmd)) {
@@ -955,15 +959,15 @@ static void set_mouse_pos(struct input_ctx *ictx, int x, int y)
 void mp_input_set_mouse_pos_artificial(struct input_ctx *ictx, int x, int y)
 {
     input_lock(ictx);
-    set_mouse_pos(ictx, x, y);
+    set_mouse_pos(ictx, x, y, false);
     input_unlock(ictx);
 }
 
-void mp_input_set_mouse_pos(struct input_ctx *ictx, int x, int y)
+void mp_input_set_mouse_pos(struct input_ctx *ictx, int x, int y, bool quiet)
 {
     input_lock(ictx);
     if (ictx->opts->enable_mouse_movements)
-        set_mouse_pos(ictx, x, y);
+        set_mouse_pos(ictx, x, y, quiet);
     input_unlock(ictx);
 }
 
@@ -980,6 +984,8 @@ static void notify_touch_update(struct input_ctx *ictx)
 {
     // queue dummy cmd so that touch-pos can notify observers
     mp_cmd_t *cmd = mp_input_parse_cmd(ictx, bstr0("ignore"), "<internal>");
+    if (cmd)
+        cmd->notify_event = true;
     queue_cmd(ictx, cmd);
 }
 
@@ -993,7 +999,7 @@ static void update_touch_point(struct input_ctx *ictx, int idx, int id, int x, i
     ictx->touch_points[idx].y = y;
     // Emulate mouse input from the primary touch point (the first one added)
     if (ictx->opts->touch_emulate_mouse && idx == 0)
-        set_mouse_pos(ictx, x, y);
+        set_mouse_pos(ictx, x, y, false);
     notify_touch_update(ictx);
 }
 
@@ -1012,7 +1018,7 @@ void mp_input_add_touch_point(struct input_ctx *ictx, int id, int x, int y)
                          (struct touch_point){id, x, y});
         // Emulate MBTN_LEFT down if this is the only touch point
         if (ictx->opts->touch_emulate_mouse && ictx->num_touch_points == 1) {
-            set_mouse_pos(ictx, x, y);
+            set_mouse_pos(ictx, x, y, false);
             feed_key(ictx, MP_MBTN_LEFT | MP_KEY_STATE_DOWN, 1, false);
         }
         notify_touch_update(ictx);
@@ -1290,7 +1296,7 @@ static void remove_binds(struct cmd_bind_section *bs, bool builtin)
     for (int n = bs->num_binds - 1; n >= 0; n--) {
         if (bs->binds[n].is_builtin == builtin) {
             bind_dealloc(&bs->binds[n]);
-            assert(bs->num_binds >= 1);
+            mp_assert(bs->num_binds >= 1);
             bs->binds[n] = bs->binds[bs->num_binds - 1];
             bs->num_binds--;
         }
@@ -1354,7 +1360,7 @@ static void bind_keys(struct input_ctx *ictx, bool builtin, bstr section,
     struct cmd_bind_section *bs = get_bind_section(ictx, section);
     struct cmd_bind *bind = NULL;
 
-    assert(num_keys <= MP_MAX_KEY_DOWN);
+    mp_assert(num_keys <= MP_MAX_KEY_DOWN);
 
     for (int n = 0; n < bs->num_binds; n++) {
         struct cmd_bind *b = &bs->binds[n];
@@ -1791,9 +1797,9 @@ static void input_src_kill(struct mp_input_src *src)
 
 void mp_input_src_init_done(struct mp_input_src *src)
 {
-    assert(!src->in->init_done);
-    assert(src->in->thread_running);
-    assert(mp_thread_id_equal(mp_thread_get_id(src->in->thread), mp_thread_current_id()));
+    mp_assert(!src->in->init_done);
+    mp_assert(src->in->thread_running);
+    mp_assert(mp_thread_id_equal(mp_thread_get_id(src->in->thread), mp_thread_current_id()));
     src->in->init_done = true;
     mp_rendezvous(&src->in->init_done, 0);
 }

@@ -15,10 +15,13 @@
  * License along with mpv.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <libavutil/hwcontext_drm.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include "config.h"
+
+#if HAVE_DRM
+#include <libavutil/hwcontext_drm.h>
+#endif
 
 #if HAVE_VAAPI
 #include <va/va_drmcommon.h>
@@ -221,30 +224,37 @@ done:
 static uintptr_t drmprime_surface_id(struct mp_image *src)
 {
     uintptr_t id = 0;
+#if HAVE_DRM
     struct AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *)src->planes[0];
 
     AVDRMObjectDescriptor object = desc->objects[0];
     id = (uintptr_t)object.fd;
+#endif
     return id;
 }
 
 static bool drmprime_drm_format(struct vo *vo, struct mp_image *src)
 {
+    bool format = false;
+#if HAVE_DRM
     struct priv *p = vo->priv;
     struct AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *)src->planes[0];
     if (!desc)
-        return false;
+        return format;
 
     // Just check the very first layer/plane.
     p->drm_format = desc->layers[0].format;
     int object_index = desc->layers[0].planes[0].object_index;
     p->drm_modifier = desc->objects[object_index].format_modifier;
-    return true;
+    format = true;
+#endif
+    return format;
 }
 
 static void drmprime_dmabuf_importer(struct buffer *buf, struct mp_image *src,
                                      struct zwp_linux_buffer_params_v1 *params)
 {
+#if HAVE_DRM
     int layer_no, plane_no;
     int max_planes = 0;
     const AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *)src->planes[0];
@@ -267,6 +277,7 @@ static void drmprime_dmabuf_importer(struct buffer *buf, struct mp_image *src,
                                            plane.pitch, modifier >> 32, modifier & 0xffffffff);
         }
     }
+#endif
 }
 
 static intptr_t surface_id(struct vo *vo, struct mp_image *src)
@@ -775,7 +786,7 @@ static int preinit(struct vo *vo)
     if (!p->ctx)
         goto err;
 
-    assert(p->ctx->ra);
+    mp_assert(p->ctx->ra);
 
     if (!vo->wl->dmabuf || !vo->wl->dmabuf_feedback) {
         MP_FATAL(vo->wl, "Compositor doesn't support the %s (ver. 4) protocol!\n",
@@ -862,8 +873,7 @@ err:
 const struct vo_driver video_out_dmabuf_wayland = {
     .description = "Wayland dmabuf video output",
     .name = "dmabuf-wayland",
-    .caps = VO_CAP_ROTATE90,
-    .frame_owner = true,
+    .caps = VO_CAP_ROTATE90 | VO_CAP_FRAMEOWNER,
     .preinit = preinit,
     .query_format = query_format,
     .reconfig2 = reconfig,

@@ -47,7 +47,6 @@ Track Selection
     ``--audio`` is an alias for ``--aid``.
 
     ``--aid=no`` or ``--audio=no`` disables audio playback.
-    (The latter variant does not work with the client API.)
 
     .. note::
 
@@ -103,7 +102,6 @@ Track Selection
     ``--sub`` is an alias for ``--sid``.
 
     ``--sid=no`` or ``--sub=no`` disables subtitle decoding.
-    (The latter variant does not work with the client API.)
 
 ``--vid=<ID|auto|no>``
     Select video channel. ``auto`` selects the default, ``no`` disables video.
@@ -111,7 +109,6 @@ Track Selection
     ``--video`` is an alias for ``--vid``.
 
     ``--vid=no`` or ``--video=no`` disables video playback.
-    (The latter variant does not work with the client API.)
 
     If video is disabled, mpv will try to download the audio only if media is
     streamed with youtube-dl, because it saves bandwidth. This is done by
@@ -1054,9 +1051,11 @@ Program Behavior
     the overlay permanent).
 
 ``--load-console=<yes|no>``
-    Enable the built-in script that shows a console on a key binding and lets
-    you enter commands (default: yes). The ````` key is used to show the
-    console by default, and ``ESC`` to hide it again.
+    Enable the built-in script to handle textual input (default: yes).
+
+``--load-commands=<yes|no>``
+    Enable the built-in script to enter commands in the console (default: yes).
+    The ````` key is used to activate this by default.
 
 ``--load-auto-profiles=<yes|no|auto>``
     Enable the builtin script that does auto profiles (default: auto). See
@@ -1830,7 +1829,7 @@ Video
     You can get the list of allowed codecs with ``mpv --vd=help``. Remove the
     prefix, e.g. instead of ``lavc:h264`` use ``h264``.
 
-    By default, this is set to ``h264,vc1,hevc,vp8,vp9,av1,prores``. Note that
+    By default, this is set to ``h264,vc1,hevc,vp8,vp9,av1,prores,ffv1``. Note that
     the hardware acceleration special codecs like ``h264_vdpau`` are not
     relevant anymore, and in fact have been removed from FFmpeg in this form.
 
@@ -4031,6 +4030,29 @@ Demuxer
     from the end of the file. The ``full`` mode actually traverses the entire
     file and can make a reliable estimate even without an index present (such
     as partial files).
+
+``--demuxer-mkv-crop-compat=<yes|no>``
+    Enable compatibility mode for files that do not fully comply with the
+    Matroska specification. (default: yes)
+
+    Most files containing cropping metadata require this mode to display correctly.
+
+    If this option is enabled, crop metadata will be applied before calculating
+    the video's aspect ratio, ensuring it is cropped accordingly. If this option
+    is disabled, the image will be cropped first and then stretched to match
+    DisplayWidth and DisplayHeight.
+
+    According to the Matroska specification, the Pixel Aspect Ratio (PAR) should
+    be calculated after cropping. However, the majority of files do not adhere
+    to this rule, as it would cause incompatibility with crop-unaware players.
+    Additionally, MKVToolNix does not automatically adjust DisplayWidth and
+    DisplayHeight when cropping metadata is applied, leading to most of files
+    created with it also failing to conform to the specification.
+
+    See for more details:
+    https://github.com/ietf-wg-cellar/matroska-specification/pull/947
+    https://gitlab.com/mbunkus/mkvtoolnix/-/issues/2389
+    https://github.com/mpv-player/mpv/pull/13446
 
 ``--demuxer-rawaudio-channels=<value>``
     Number of channels (or channel layout) if ``--demuxer=rawaudio`` is used

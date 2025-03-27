@@ -108,16 +108,17 @@ void mp_core_unlock(struct MPContext *mpctx)
 // Process any queued user input.
 static void mp_process_input(struct MPContext *mpctx)
 {
-    int processed = 0;
+    bool notify = false;
     for (;;) {
         mp_cmd_t *cmd = mp_input_read_cmd(mpctx->input);
         if (!cmd)
             break;
+        if (cmd->notify_event)
+            notify = true;
         run_command(mpctx, cmd, NULL, NULL, NULL);
-        processed = 1;
     }
     mp_set_timeout(mpctx, mp_input_get_delay(mpctx->input));
-    if (processed)
+    if (notify)
         mp_notify(mpctx, MP_EVENT_INPUT_PROCESSED, NULL);
 }
 
@@ -125,7 +126,7 @@ static void mp_process_input(struct MPContext *mpctx)
 void handle_option_callbacks(struct MPContext *mpctx)
 {
     for (int i = 0; i < mpctx->num_option_callbacks; i++)
-        mp_option_run_callback(mpctx, i);
+        mp_option_run_callback(mpctx, &mpctx->option_callbacks[i]);
     mpctx->num_option_callbacks = 0;
 }
 

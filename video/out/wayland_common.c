@@ -288,8 +288,8 @@ static void pointer_handle_enter(void *data, struct wl_pointer *pointer,
     wl->mouse_x = handle_round(wl->scaling, wl_fixed_to_int(sx));
     wl->mouse_y = handle_round(wl->scaling, wl_fixed_to_int(sy));
 
-    if (!wl->toplevel_configured)
-        mp_input_set_mouse_pos(wl->vo->input_ctx, wl->mouse_x, wl->mouse_y);
+    mp_input_set_mouse_pos(wl->vo->input_ctx, wl->mouse_x, wl->mouse_y,
+                           wl->toplevel_configured);
     wl->toplevel_configured = false;
 }
 
@@ -310,8 +310,8 @@ static void pointer_handle_motion(void *data, struct wl_pointer *pointer,
     wl->mouse_x = handle_round(wl->scaling, wl_fixed_to_int(sx));
     wl->mouse_y = handle_round(wl->scaling, wl_fixed_to_int(sy));
 
-    if (!wl->toplevel_configured)
-        mp_input_set_mouse_pos(wl->vo->input_ctx, wl->mouse_x, wl->mouse_y);
+    mp_input_set_mouse_pos(wl->vo->input_ctx, wl->mouse_x, wl->mouse_y,
+                           wl->toplevel_configured);
     wl->toplevel_configured = false;
 }
 
@@ -777,7 +777,7 @@ static void data_device_handle_enter(void *data, struct wl_data_device *wl_ddev,
         return;
     }
 
-    assert(!s->dnd_offer->offer);
+    mp_assert(!s->dnd_offer->offer);
     int action = s->dnd_offer->action;
     *s->dnd_offer = *s->pending_offer;
     *s->pending_offer = (struct vo_wayland_data_offer){.fd = -1};
@@ -1998,7 +1998,7 @@ static void registry_handle_add(void *data, struct wl_registry *reg, uint32_t id
 
 #if HAVE_WAYLAND_PROTOCOLS_1_32
     if (!strcmp(interface, wp_cursor_shape_manager_v1_interface.name) && found++) {
-        ver = 1;
+        ver = MPMIN(ver, 2);
         wl->cursor_shape_manager = wl_registry_bind(reg, id, &wp_cursor_shape_manager_v1_interface, ver);
     }
 #endif
@@ -2423,11 +2423,10 @@ static int lookupkey(int key)
         mpkey = lookup_keymap_table(keymap, key);
 
     // XFree86 keysym range; typically contains obscure "extra" keys
-    if (!mpkey && key >= 0x10080001 && key <= 0x1008FFFF) {
+    static_assert(MP_KEY_UNKNOWN_RESERVED_START + (0x1008FFFF - 0x10080000) <=
+                  MP_KEY_UNKNOWN_RESERVED_LAST, "");
+    if (!mpkey && key >= 0x10080001 && key <= 0x1008FFFF)
         mpkey = MP_KEY_UNKNOWN_RESERVED_START + (key - 0x10080000);
-        if (mpkey > MP_KEY_UNKNOWN_RESERVED_LAST)
-            mpkey = 0;
-    }
 
     return mpkey;
 }
@@ -2625,18 +2624,24 @@ static void set_color_management(struct vo_wayland_state *wl)
     struct pl_hdr_metadata hdr = wl->target_params.color.hdr;
     if (wl->supports_display_primaries) {
         wp_image_description_creator_params_v1_set_mastering_display_primaries(image_creator_params,
-                hdr.prim.red.x * WAYLAND_COLOR_FACTOR, hdr.prim.red.y * WAYLAND_COLOR_FACTOR, hdr.prim.green.x * WAYLAND_COLOR_FACTOR,
-                hdr.prim.green.y * WAYLAND_COLOR_FACTOR, hdr.prim.blue.x * WAYLAND_COLOR_FACTOR, hdr.prim.blue.y * WAYLAND_COLOR_FACTOR,
-                hdr.prim.white.x * WAYLAND_COLOR_FACTOR, hdr.prim.white.y * WAYLAND_COLOR_FACTOR);
+                lrintf(hdr.prim.red.x * WAYLAND_COLOR_FACTOR),
+                lrintf(hdr.prim.red.y * WAYLAND_COLOR_FACTOR),
+                lrintf(hdr.prim.green.x * WAYLAND_COLOR_FACTOR),
+                lrintf(hdr.prim.green.y * WAYLAND_COLOR_FACTOR),
+                lrintf(hdr.prim.blue.x * WAYLAND_COLOR_FACTOR),
+                lrintf(hdr.prim.blue.y * WAYLAND_COLOR_FACTOR),
+                lrintf(hdr.prim.white.x * WAYLAND_COLOR_FACTOR),
+                lrintf(hdr.prim.white.y * WAYLAND_COLOR_FACTOR));
 
         if (hdr.min_luma < hdr.max_luma)
-            wp_image_description_creator_params_v1_set_mastering_luminance(image_creator_params, hdr.min_luma * WAYLAND_MIN_LUM_FACTOR, hdr.max_luma);
+            wp_image_description_creator_params_v1_set_mastering_luminance(image_creator_params,
+                lrintf(hdr.min_luma * WAYLAND_MIN_LUM_FACTOR), lrintf(hdr.max_luma));
 
         if (hdr.max_cll > hdr.min_luma && hdr.max_cll <= hdr.max_luma)
-            wp_image_description_creator_params_v1_set_max_cll(image_creator_params, hdr.max_cll);
+            wp_image_description_creator_params_v1_set_max_cll(image_creator_params, lrintf(hdr.max_cll));
 
         if (hdr.max_fall > hdr.min_luma && hdr.max_fall <= hdr.max_luma && hdr.max_fall <= hdr.max_cll)
-            wp_image_description_creator_params_v1_set_max_fall(image_creator_params, hdr.max_fall);
+            wp_image_description_creator_params_v1_set_max_fall(image_creator_params, lrintf(hdr.max_fall));
     }
     struct wp_image_description_v1 *image_description = wp_image_description_creator_params_v1_create(image_creator_params);
     wp_image_description_v1_add_listener(image_description, &image_description_listener, wl);

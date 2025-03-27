@@ -383,9 +383,6 @@ Left double click
 Right click
     Toggle pause on/off.
 
-Middle click
-    Pan through the whole video while holding the button.
-
 Forward/Back button
     Skip to next/previous entry in playlist.
 
@@ -1280,6 +1277,12 @@ More options to configure this functionality are listed in `Watch Later`_.
 PROTOCOLS
 =========
 
+``mpv://...``
+
+    mpv protocol. This is used for starting mpv from URL handler. The protocol
+    is stripped and the rest is passed to the player as a normal open argument.
+    Only safe network protocols are allowed to be opened this way.
+
 ``http://...``, ``https://``, ...
 
     Many network protocols are supported, but the protocol prefix must always
@@ -1537,6 +1540,8 @@ works like in older mpv releases:
 .. include:: stats.rst
 
 .. include:: console.rst
+
+.. include:: commands.rst
 
 .. include:: select.rst
 

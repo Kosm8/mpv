@@ -147,6 +147,7 @@ struct format_hack {
     bool no_seek_on_no_duration : 1;
     bool readall_on_no_streamseek : 1;
     bool first_frame_only : 1;
+    bool no_ext_picky : 1;      // set "extension_picky" to false
 };
 
 #define BLACKLIST(fmt) {fmt, .ignore = true}
@@ -162,7 +163,7 @@ static const struct format_hack format_hacks[] = {
     {"mp3", "audio/mpeg", 24, 0.5},
     {"mp3", NULL,         24, .max_probe = true},
 
-    {"hls", .no_stream = true, .clear_filepos = true},
+    {"hls", .no_stream = true, .clear_filepos = true, .no_ext_picky = true},
     {"dash", .no_stream = true, .clear_filepos = true},
     {"sdp", .clear_filepos = true, .is_network = true, .no_seek = true},
     {"mpeg", .use_stream_ids = true},
@@ -649,7 +650,7 @@ static void export_replaygain(demuxer_t *demuxer, struct sh_stream *sh,
 
     // This must be run only before the stream was added, otherwise there
     // will be race conditions with accesses from the user thread.
-    assert(!sh->ds);
+    mp_assert(!sh->ds);
     sh->codec->replaygain_data = rgain;
 }
 
@@ -814,7 +815,7 @@ static void handle_new_stream(demuxer_t *demuxer, int i)
         .last_key_pts = MP_NOPTS_VALUE,
         .highest_pts = MP_NOPTS_VALUE,
     };
-    assert(priv->num_streams == i); // directly mapped
+    mp_assert(priv->num_streams == i); // directly mapped
     MP_TARRAY_APPEND(priv, priv->streams, priv->num_streams, info);
 
     if (sh) {
@@ -1003,6 +1004,18 @@ static int demux_open_lavf(demuxer_t *demuxer, enum demux_check check)
                            analyze_duration * AV_TIME_BASE, 0) < 0)
             MP_ERR(demuxer, "demux_lavf, couldn't set option "
                    "analyzeduration to %f\n", analyze_duration);
+    }
+
+    if (priv->format_hack.no_ext_picky) {
+        bool user_set_ext_picky = false;
+        for (int i = 0; lavfdopts->avopts && lavfdopts->avopts[i * 2]; i++) {
+            if (bstr_startswith0(bstr0(lavfdopts->avopts[i * 2]), "extension_picky")) {
+                user_set_ext_picky = true;
+                break;
+            }
+        }
+        if (!user_set_ext_picky && av_dict_set(&dopts, "extension_picky", "0", 0) >= 0)
+            MP_VERBOSE(demuxer, "Option extension_picky=0 was set due to known FFmpeg bugs\n");
     }
 
     if ((priv->avif_flags & AVFMT_NOFILE) || priv->format_hack.no_stream) {
@@ -1221,7 +1234,7 @@ static bool demux_lavf_read_packet(struct demuxer *demux,
     add_new_streams(demux);
     update_metadata(demux);
 
-    assert(pkt->stream_index >= 0 && pkt->stream_index < priv->num_streams);
+    mp_assert(pkt->stream_index >= 0 && pkt->stream_index < priv->num_streams);
     struct stream_info *info = priv->streams[pkt->stream_index];
     struct sh_stream *stream = info->sh;
     AVStream *st = priv->avfc->streams[pkt->stream_index];

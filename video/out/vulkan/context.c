@@ -194,6 +194,7 @@ pl_vulkan mppl_create_vulkan(struct vulkan_opts *opts,
         VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
         VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
         "VK_KHR_video_decode_av1", /* VK_KHR_VIDEO_DECODE_AV1_EXTENSION_NAME */
+        "VK_KHR_video_maintenance2", /* VK_KHR_VIDEO_MAINTENANCE_2_EXTENSION_NAME */
     };
 
 #ifdef VK_EXT_SHADER_OBJECT_EXTENSION_NAME
@@ -225,8 +226,8 @@ pl_vulkan mppl_create_vulkan(struct vulkan_opts *opts,
     bool is_uuid = opts->device &&
                    av_uuid_parse(opts->device, param_uuid) == 0;
 
-    assert(pllog);
-    assert(vkinst);
+    mp_assert(pllog);
+    mp_assert(vkinst);
     struct pl_vulkan_params device_params = {
         .instance = vkinst->instance,
         .get_proc_addr = vkinst->get_proc_addr,

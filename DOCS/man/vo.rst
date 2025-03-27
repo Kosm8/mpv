@@ -302,7 +302,7 @@ Available video output drivers are:
     as ``auto-safe``. It can still work in some circumstances without ``--hwdec`` due to
     mpv's internal conversion filters, but this is not recommended as it's a needless
     extra step. Correct output depends on support from your GPU, drivers, and compositor.
-    This requires the compositor and mpv to support ``xx-color-management-v4`` to
+    This requires the compositor and mpv to support ``color-management-v1`` to
     accurately display colorspaces that are different from the compositor
     default (bt.601 in most cases).
 
@@ -454,6 +454,14 @@ Available video output drivers are:
         and not via e.g. SSH connections.
 
         This option is not implemented on Windows.
+
+    ``--vo-kitty-auto-multiplexer-passthrough=<yes|no>`` (default: no)
+        Automatically detect terminal multiplexer to passthrough escape
+        sequences. This allows the image protocol to work in multiplexers that
+        might not support the kitty image protocol by passing through the
+        escape sequences directly to the terminal.
+
+        Currently only supports tmux and GNU screen.
 
 ``sixel``
     Graphical output for the terminal, using sixels. Tested with ``mlterm`` and

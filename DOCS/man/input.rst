@@ -419,6 +419,10 @@ Property Manipulation
     Add the given value to the property or option. On overflow or underflow,
     clamp the property to the maximum. If ``<value>`` is omitted, assume ``1``.
 
+    Whether or not key-repeat is enabled by default depends on the property.
+    Currently properties with continuous values are repeatable by default (like
+    ``volume``), while discrete values are not (like ``osd-level``).
+
     This is a scalable command. See the documentation of ``nonscalable`` input
     command prefix in `Input Command Prefixes`_ for details.
 
@@ -659,6 +663,21 @@ Track Manipulation
         (In this case, title/language are ignored, and if the was changed since
         it was loaded, these changes won't be reflected.)
 
+    Additionally the following flags can be added with a ``+``:
+
+    <hearing-impaired>
+
+        Marks the track as suitable for the hearing impaired.
+
+    <visual-impaired>
+
+        Marks the track as suitable for the visually impaired.
+
+    <attached-picture> (only for ``video-add``)
+
+        Marks the track as an attached picture, same as ``albumart`` argument
+        for ```video-add``.
+
     The ``title`` argument sets the track title in the UI.
 
     The ``lang`` argument sets the track language, and can also influence
@@ -783,7 +802,7 @@ Configuration Commands
 
     The mode argument:
 
-    ``default``
+    ``apply``
         Apply the profile. Default if the argument is omitted.
 
     ``restore``
@@ -2272,6 +2291,14 @@ Property list
 
 ``chapter`` (RW)
     Current chapter number. The number of the first chapter is 0.
+    A value of -1 indicates that the current playback position is before the
+    start of the first chapter,
+
+    Setting this property results in an absolute seek to the start of the
+    chapter. However, if the property is changed with ``add`` or ``cycle``
+    command which results in a decrement in value, it may go to the start of
+    the current chapter instead of the previous chapter.
+    See ``--chapter-seek-threshold`` for details.
 
 ``edition`` (RW)
     Current edition number. Setting this property to a different value will
@@ -4016,7 +4043,6 @@ Property list
     See ``--clipboard-backends`` option for the list of available backends.
 
 ``clock``
-
     The current local time in hour:minutes format.
 
 Inconsistencies between options and properties

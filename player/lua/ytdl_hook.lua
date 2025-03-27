@@ -818,6 +818,7 @@ local function add_single_video(json)
     -- add chapters
     if json.chapters then
         msg.debug("Adding pre-parsed chapters")
+        chapter_list = {}
         for i = 1, #json.chapters do
             local chapter = json.chapters[i]
             local title = chapter.title or ""
@@ -1204,7 +1205,7 @@ end
 
 local function on_load_hook(load_fail)
     local url = mp.get_property("stream-open-filename", "")
-    local force = url:find("^ytdl://")
+    local force = url:find("^ytdl://") ~= nil
     local early = force or o.try_ytdl_first or is_whitelisted(url)
     if early == load_fail then
         return
