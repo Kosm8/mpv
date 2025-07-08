@@ -165,6 +165,8 @@ static void update_lut(struct priv *p, struct user_lut *lut);
 
 struct gl_next_opts {
     bool delayed_peak;
+    int sub_hdr_peak;
+    int image_subs_hdr_peak;
     int border_background;
     float corner_rounding;
     bool inter_preserve;
@@ -186,6 +188,10 @@ const struct m_opt_choice_alternatives lut_types[] = {
 #define OPT_BASE_STRUCT struct gl_next_opts
 const struct m_sub_options gl_next_conf = {
     .opts = (const struct m_option[]) {
+        {"sub-hdr-peak", OPT_CHOICE(sub_hdr_peak, {"sdr", PL_COLOR_SDR_WHITE}),
+            M_RANGE(10, 10000)},
+        {"image-subs-hdr-peak", OPT_CHOICE(image_subs_hdr_peak, {"sdr", PL_COLOR_SDR_WHITE},
+            {"video", -1}),  M_RANGE(10, 10000)},
         {"allow-delayed-peak-detect", OPT_BOOL(delayed_peak)},
         {"border-background", OPT_CHOICE(border_background,
             {"none",  BACKGROUND_NONE},
@@ -206,6 +212,8 @@ const struct m_sub_options gl_next_conf = {
     .defaults = &(struct gl_next_opts) {
         .border_background = BACKGROUND_COLOR,
         .inter_preserve = true,
+        .sub_hdr_peak = PL_COLOR_SDR_WHITE,
+        .image_subs_hdr_peak = PL_COLOR_SDR_WHITE,
     },
     .size = sizeof(struct gl_next_opts),
     .change_flags = UPDATE_VIDEO,
@@ -365,17 +373,28 @@ static void update_overlays(struct vo *vo, struct mp_osd_res res,
             // Infer bitmap colorspace from source
             if (src) {
                 ol->color = src->params.color;
-                // Seems like HDR subtitles are targeting SDR white
                 if (pl_color_transfer_is_hdr(ol->color.transfer)) {
-                    ol->color.hdr = (struct pl_hdr_metadata) {
-                        .max_luma = PL_COLOR_SDR_WHITE,
-                    };
+                    if (!pl_color_transfer_is_hdr(frame->color.transfer)) {
+                        // Tone mapping targets SDR white
+                        ol->color.hdr = (struct pl_hdr_metadata) {
+                            .max_luma = PL_COLOR_SDR_WHITE,
+                        };
+                    } else if (p->next_opts->image_subs_hdr_peak != -1) {
+                        ol->color.hdr = (struct pl_hdr_metadata) {
+                            .max_luma = p->next_opts->image_subs_hdr_peak,
+                        };
+                    }
                 }
             }
             break;
         case SUBBITMAP_LIBASS:
             if (src && item->video_color_space && !pl_color_space_is_hdr(&src->params.color))
                 ol->color = src->params.color;
+            if (src && pl_color_transfer_is_hdr(frame->color.transfer)) {
+                ol->color.hdr = (struct pl_hdr_metadata) {
+                    .max_luma = p->next_opts->sub_hdr_peak,
+                };
+            }
             ol->mode = PL_OVERLAY_MONOCHROME;
             ol->repr.alpha = PL_ALPHA_INDEPENDENT;
             break;
@@ -796,7 +815,7 @@ static void apply_target_contrast(struct priv *p, struct pl_color_space *color, 
 }
 
 static void apply_target_options(struct priv *p, struct pl_frame *target,
-                                 float target_peak, float min_luma)
+                                 float min_luma, bool hint)
 {
     update_lut(p, &p->next_opts->target_lut);
     target->lut = p->next_opts->target_lut.lut;
@@ -804,22 +823,16 @@ static void apply_target_options(struct priv *p, struct pl_frame *target,
 
     // Colorspace overrides
     const struct gl_video_opts *opts = p->opts_cache->opts;
-    if (p->output_levels)
-        target->repr.levels = p->output_levels;
-    if (opts->target_prim)
-        target->color.primaries = opts->target_prim;
-    if (opts->target_trc)
-        target->color.transfer = opts->target_trc;
     // If swapchain returned a value use this, override is used in hint
-    if (target_peak && !target->color.hdr.max_luma)
-        target->color.hdr.max_luma = target_peak;
-    // Don't set a target peak for SDR output. It rarely makes sense. If there's
-    // a use case for it, we likely need separate options for SDR, as the target
-    // peak almost never matches what we have in HDR mode.
-    if (!pl_color_transfer_is_hdr(target->color.transfer))
-        target->color.hdr.max_luma = 0;
-    // Note that we still set min_luma in SDR mode, for bt.1886.
-    if (!target->color.hdr.min_luma)
+    if (p->output_levels && (!target->repr.levels || !hint))
+        target->repr.levels = p->output_levels;
+    if (opts->target_prim && (!target->color.primaries || !hint))
+        target->color.primaries = opts->target_prim;
+    if (opts->target_trc && (!target->color.transfer || !hint))
+        target->color.transfer = opts->target_trc;
+    if (opts->target_peak && (!target->color.hdr.max_luma || !hint))
+        target->color.hdr.max_luma = opts->target_peak;
+    if ((!target->color.hdr.min_luma || !hint))
         apply_target_contrast(p, &target->color, min_luma);
     if (opts->target_gamut) {
         // Ensure resulting gamut still fits inside container
@@ -843,7 +856,7 @@ static void apply_target_options(struct priv *p, struct pl_frame *target,
         tbits->sample_depth = dither_depth;
     }
 
-    if (opts->icc_opts->icc_use_luma && pl_color_transfer_is_hdr(target->color.transfer)) {
+    if (opts->icc_opts->icc_use_luma) {
         p->icc_params.max_luma = 0.0f;
     } else {
         pl_color_space_nominal_luma_ex(pl_nominal_luma_params(
@@ -997,23 +1010,46 @@ static bool draw_frame(struct vo *vo, struct vo_frame *frame)
                      ? sw->fns->target_csp(sw)
                      : (struct pl_color_space){ .transfer = PL_COLOR_TRC_PQ };
     if (!pl_color_transfer_is_hdr(target_csp.transfer)) {
+        // Don't use reported display peak in SDR mode. Mostly because libplacebo
+        // forcefully switches to PQ if hinting hdr metadata, ignoring the transfer
+        // set in the hint. But also because setting target peak in SDR mode is
+        // very specific usecase, needs proper calibration, users can set it manually.
         target_csp.hdr.max_luma = 0;
         target_csp.hdr.min_luma = 0;
     }
 
-    float target_peak = opts->target_peak ? opts->target_peak : target_csp.hdr.max_luma;
     struct pl_color_space hint;
     bool target_hint = p->next_opts->target_hint == 1 ||
                        (p->next_opts->target_hint == -1 &&
                         pl_color_transfer_is_hdr(target_csp.transfer));
     if (target_hint && frame->current) {
         hint = frame->current->params.color;
+        float target_peak = opts->target_peak ? opts->target_peak : target_csp.hdr.max_luma;
+        float target_trc = opts->target_trc;
+        if (!target_trc) {
+            // If we are targeting HDR display, repack SDR to target trc. This way
+            // we ensure that conversion is done by mpv and not by the compositor,
+            // which is often worse in terms of quality. Do this only if we are sure
+            // that display is in HDR mode, i.e. target_csp() reported HDR transfer.
+            // libplacebo already does the same when peak > 203, but we want this
+            // for any peak value.
+            // Note: We don't have information if the compositor/driver is able to
+            // reconfigure the display, currently target_csp() is only implemented
+            // for D3D11 where we know automatic reconfiguration never happens.
+            // Also I like to minimize possible reconfigurations, and outputting  SDR
+            // in PQ is fine.
+            if (pl_color_transfer_is_hdr(target_csp.transfer) && target_csp.hdr.max_luma > 0 &&
+                !pl_color_transfer_is_hdr(frame->current->params.color.transfer))
+            {
+                target_trc = target_trc ? target_trc : target_csp.transfer;
+            }
+        }
         if (p->ra_ctx->fns->pass_colorspace && p->ra_ctx->fns->pass_colorspace(p->ra_ctx))
             pass_colorspace = true;
         if (opts->target_prim)
             hint.primaries = opts->target_prim;
-        if (opts->target_trc)
-            hint.transfer = opts->target_trc;
+        if (target_trc)
+            hint.transfer = target_trc;
         if (target_peak)
             hint.hdr.max_luma = target_peak;
         apply_target_contrast(p, &hint, target_csp.hdr.min_luma);
@@ -1047,7 +1083,7 @@ static bool draw_frame(struct vo *vo, struct vo_frame *frame)
     // Calculate target
     struct pl_frame target;
     pl_frame_from_swapchain(&target, &swframe);
-    apply_target_options(p, &target, target_peak, target_csp.hdr.min_luma);
+    apply_target_options(p, &target, target_csp.hdr.min_luma, target_hint);
     update_overlays(vo, p->osd_res,
                     (frame->current && opts->blend_subs) ? OSD_DRAW_OSD_ONLY : 0,
                     PL_OVERLAY_COORDS_DST_FRAME, &p->osd_state, &target, frame->current);
@@ -1422,7 +1458,7 @@ static void video_screenshot(struct vo *vo, struct voctrl_screenshot *args)
     const struct gl_video_opts *opts = p->opts_cache->opts;
     if (args->scaled) {
         // Apply target LUT, ICC profile and CSP override only in window mode
-        apply_target_options(p, &target, opts->target_peak, 0);
+        apply_target_options(p, &target, 0, false);
     } else if (args->native_csp) {
         target.color = image.color;
     } else {
