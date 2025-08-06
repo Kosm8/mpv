@@ -1004,18 +1004,15 @@ Program Behavior
 
         I have no idea.
 
-``--ytdl-format=<ytdl|best|worst|mp4|webm|...>``
-    Video format/quality that is directly passed to youtube-dl. The possible
-    values are specific to the website and the video, for a given url the
-    available formats can be found with the command
-    ``youtube-dl --list-formats URL``. See youtube-dl's documentation for
-    available aliases.
-    (Default: ``bestvideo+bestaudio/best``)
+``--ytdl-format=<|ytdl|best|worst|mp4|webm|...>``
+    Format selection string that is directly passed to youtube-dl.
+    The possible values are specific to the website and the video, for a given
+    URL the available formats can be found with the command
+    ``youtube-dl -F URL``. See youtube-dl's documentation for available aliases.
+    (Default: empty)
 
-    The ``ytdl`` value does not pass a ``--format`` option to youtube-dl at all,
-    and thus does not override its default. Note that sometimes youtube-dl
-    returns a format that mpv cannot use, and in these cases the mpv default
-    may work better.
+    An empty value or ``ytdl`` does not pass a ``--format`` option to youtube-dl
+    at all, and thus uses its default format selection behavior.
 
 ``--ytdl-raw-options=<key>=<value>[,<key>=<value>[,...]]``
     Pass arbitrary options to youtube-dl. Parameter and argument should be
@@ -1169,7 +1166,7 @@ Watch History
 
 ``--watch-history-path=<path>``
     The path in which to store the watch history. Default:
-    ``~~state/watch_history.jsonl`` (see `PATHS`_).
+    ``~~state/watch_history.jsonl`` (see `FILES`_).
 
     This file contains one JSON object per line. Its ``time`` field is the UNIX
     timestamp when the file was opened, its ``path`` field is the normalized
@@ -3714,11 +3711,14 @@ Window
     environments. This functionality was removed in 0.33.0, but it is possible to
     call the ``xdg-screensaver`` command line program from a user script instead.
 
-``--wid=<ID>``
+``--wid=<ID|-1>``
     This tells mpv to attach to an existing window. If a VO is selected that
     supports this option, it will use that window for video output. mpv will
     scale the video to the size of this window, and will add black bars to
     compensate if the aspect ratio of the video is different.
+
+    An ID of value ``-1`` is interpreted specially, and mpv will detach from
+    the currently attached window to its own window.
 
     On X11, the ID is interpreted as a ``Window`` on X11. Unlike
     MPlayer/mplayer2, mpv always creates its own window, and sets the wid
