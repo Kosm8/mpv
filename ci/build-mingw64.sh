@@ -25,14 +25,10 @@ export AR=$TARGET-ar
 export NM=$TARGET-nm
 export RANLIB=$TARGET-ranlib
 
-export CFLAGS="-O2 -pipe -Wall"
+export CFLAGS="-O3 -ffast-math -pipe -Wall"
 export LDFLAGS="-fstack-protector-strong"
 
 . ./ci/build-common.sh
-
-if [[ "$TARGET" == "i686-"* ]]; then
-    export WINEPATH="`$CC -print-file-name=`;/usr/$TARGET/lib"
-fi
 
 # anything that uses pkg-config
 export PKG_CONFIG_SYSROOT_DIR="$prefix_dir"
@@ -65,7 +61,7 @@ exe_wrapper = 'wine'
 [host_machine]
 system = 'windows'
 cpu_family = '${fam}'
-cpu = '${TARGET%%-*}'
+cpu = 'core2'
 endian = 'little'
 EOF
 
@@ -73,7 +69,7 @@ EOF
 cmake_args=(
     -Wno-dev
     -GNinja
-    -DCMAKE_SYSTEM_PROCESSOR="${fam}"
+    -DCMAKE_SYSTEM_PROCESSOR=core2
     -DCMAKE_SYSTEM_NAME=Windows
     -DCMAKE_FIND_ROOT_PATH="$PKG_CONFIG_SYSROOT_DIR"
     -DCMAKE_RC_COMPILER="${TARGET}-windres"
@@ -148,6 +144,7 @@ function build_if_missing {
 
 _iconv () {
     local ver=1.19
+    #gettar "https://www.mirrorservice.org/sites/ftp.gnu.org/gnu/libiconv/libiconv-${ver}.tar.gz"
     gettar "https://ftpmirror.gnu.org/gnu/libiconv/libiconv-${ver}.tar.gz" || \
         gettar "https://ftp.gnu.org/pub/gnu/libiconv/libiconv-${ver}.tar.gz"
     builddir libiconv-${ver}
@@ -169,36 +166,6 @@ _zlib_ng () {
 }
 _zlib_ng_mark=lib/libzlib.dll.a
 
-_dav1d () {
-    [ -d dav1d ] || $gitclone https://code.videolan.org/videolan/dav1d.git
-    builddir dav1d
-    meson setup .. --cross-file "$prefix_dir/crossfile" \
-        -Denable_{tools,tests}=false
-    makeplusinstall
-    popd
-}
-_dav1d_mark=lib/libdav1d.dll.a
-
-_lcms2 () {
-    [ -d lcms2 ] || $gitclone https://github.com/mm2/Little-CMS.git lcms2
-    builddir lcms2
-    meson setup .. --cross-file "$prefix_dir/crossfile" \
-        -Dtests=disabled -D{utils,versionedlibs}=false
-    makeplusinstall
-    popd
-}
-_lcms2_mark=lib/liblcms2.dll.a
-
-_amf_headers () {
-    local ver=1.5.2
-    gettar "https://github.com/GPUOpen-LibrariesAndSDKs/AMF/releases/download/v${ver}/AMF-headers-v${ver}.tar.gz" amf-headers-v${ver}
-    pushd amf-headers-v${ver}
-    mkdir -p "$prefix_dir/include"
-    cp -r AMF "$prefix_dir/include/"
-    popd
-}
-_amf_headers_mark=include/AMF/core/Version.h
-
 _ffmpeg () {
     [ -d ffmpeg ] || $gitclone https://github.com/FFmpeg/FFmpeg.git ffmpeg
     builddir ffmpeg
@@ -206,10 +173,11 @@ _ffmpeg () {
         --pkg-config=pkg-config --target-os=mingw32 --enable-gpl
         --enable-cross-compile --cross-prefix=$TARGET- --arch=${TARGET%%-*}
         --cc="$CC" --cxx="$CXX" $at_flags
-        --disable-{doc,programs}
-        --enable-muxer=spdif --enable-encoder=mjpeg,png --enable-libdav1d
+        --disable-{doc,programs,debug,avdevice,muxers,devices,bsfs,filters,encoders}
+        --disable-decoder=aac_fixed,ac3_fixed,mp1,mp2,mp3,mp3adu,mp3on4
+        --enable-filter=bwdif,dynaudnorm,loudnorm,rotate,vflip
     )
-    pkg-config vulkan && args+=(--enable-vulkan)
+    pkg-config vulkan && args+=(--disable-vulkan)
     ../configure "${args[@]}"
     makeplusinstall
     popd
@@ -239,37 +207,11 @@ _spirv_cross () {
 }
 _spirv_cross_mark=lib/libspirv-cross-c-shared.dll.a
 
-_nv_headers () {
-    [ -d nv-codec-headers ] || $gitclone https://github.com/FFmpeg/nv-codec-headers
-    pushd nv-codec-headers
-    makeplusinstall
-    popd
-}
-_nv_headers_mark=include/ffnvcodec/dynlink_loader.h
-
-_vulkan_headers () {
-    [ -d Vulkan-Headers ] || $gitclone https://github.com/KhronosGroup/Vulkan-Headers
-    builddir Vulkan-Headers
-    cmake .. "${cmake_args[@]}"
-    makeplusinstall
-    popd
-}
-_vulkan_headers_mark=include/vulkan/vulkan.h
-
-_vulkan_loader () {
-    [ -d Vulkan-Loader ] || $gitclone https://github.com/KhronosGroup/Vulkan-Loader
-    builddir Vulkan-Loader
-    cmake .. "${cmake_args[@]}" -DUSE_GAS=ON
-    makeplusinstall
-    popd
-}
-_vulkan_loader_mark=lib/libvulkan-1.dll.a
-
 _libplacebo () {
-    [ -d libplacebo ] || $gitclone https://code.videolan.org/videolan/libplacebo.git
+    [ -d libplacebo ] || $gitclone https://github.com/haasn/libplacebo.git
     builddir libplacebo
     meson setup .. --cross-file "$prefix_dir/crossfile" \
-        -Ddemos=false -D{opengl,d3d11,lcms}=enabled
+        -Ddemos=false -Dvulkan=disabled -Dd3d11=enabled
     makeplusinstall
     popd
 }
@@ -340,7 +282,7 @@ _subrandr () {
 _subrandr_mark=lib/libsubrandr.dll.a
 
 _curl () {
-    local ver=8.20.0
+    local ver=8.23.0
     gettar "https://curl.se/download/curl-${ver}.tar.xz"
     builddir curl-${ver}
     cmake .. "${cmake_args[@]}" \
@@ -350,19 +292,16 @@ _curl () {
 }
 _curl_mark=lib/libcurl.dll.a
 
-for x in iconv zlib-ng shaderc spirv-cross amf-headers nv-headers dav1d lcms2; do
+for x in iconv zlib-ng shaderc spirv-cross; do
     build_if_missing $x
 done
-if [[ "$TARGET" != "i686-"* ]]; then
+if [[ "$TARGET" != "x86_64-"* ]]; then
     build_if_missing vulkan-headers
     build_if_missing vulkan-loader
 fi
 for x in ffmpeg libplacebo freetype fribidi harfbuzz libass luajit curl; do
     build_if_missing $x
 done
-if [[ "$TARGET" != "i686-"* ]]; then
-    build_if_missing subrandr
-fi
 
 ## mpv
 
@@ -384,7 +323,7 @@ mpv_args=(
     -Dmujs:werror=false
     -Dmujs:default_library=static
     -Dlua=luajit
-    -D{amf,shaderc,spirv-cross,d3d11,javascript,libcurl}=enabled
+    -D{shaderc,spirv-cross,d3d11,javascript,libcurl}=enabled
 )
 meson setup $build "${mpv_args[@]}"
 meson compile -C $build
@@ -392,7 +331,7 @@ meson compile -C $build
 if [ "$2" = pack ]; then
     mkdir -p artifact/tmp
     echo "Copying:"
-    cp -pv $build/mpv.com $build/mpv.exe etc/mpv-*.bat artifact/
+    cp -pv $build/mpv.com $build/mpv.exe artifact/
 
     echo "Adding DLLs:"
     # grab everything we can get our hands on
@@ -410,7 +349,7 @@ if [ "$2" = pack ]; then
         av*.dll sw*.dll postproc-[0-9]*.dll
         # everything else
         subrandr-[0-9]*.dll lib{ass,freetype,fribidi,harfbuzz,iconv,placebo}-[0-9]*.dll
-        lib{curl,shaderc_shared,spirv-cross-c-shared,dav1d,lcms2,zlib1}.dll
+        lib{curl,shaderc_shared,spirv-cross-c-shared,zlib1}.dll
     )
     [[ -f vulkan-1.dll ]] && dlls+=(vulkan-1.dll)
     mv -v "${dlls[@]}" ..
