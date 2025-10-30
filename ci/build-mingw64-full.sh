@@ -39,8 +39,8 @@ pushd ffmpeg
             --extra-libs="$FF_LIBS" --extra-ldflags="$FF_LDFLAGS" \
             --extra-ldexeflags="$FF_LDEXEFLAGS" \
             --cc="$CC" --cxx="$CXX" --ar="$AR" --ranlib="$RANLIB" --nm="$NM" \
-            --enable-static --disable-shared --disable-{doc,programs} \
-            --disable-{librav1e,librsvg,openal} || { cat ffbuild/config.log; exit 1; }
+            --enable-static --disable-shared --disable-{doc,programs,debug,avdevice,muxers,devices,bsfs,filters,encoders} --disable-demuxer=matroska --disable-decoder=aac_fixed,ac3_fixed,mp1,mp2,mp3,mp3adu,mp3on4 --enable-filter=bwdif,dynaudnorm,loudnorm,rotate,vflip \
+            --disable-{librav1e,librsvg,openal} --enable-libdav1d || { cat ffbuild/config.log; exit 1; }
 make -j"$(nproc)"
 make install
 popd
@@ -56,16 +56,6 @@ make TARGET_SYS=Windows PREFIX="$FFBUILD_PREFIX" HOST_CC="$HOST_CC" \
      CFLAGS="$HOST_CFLAGS" CROSS="$FFBUILD_CROSS_PREFIX" TARGET_CFLAGS="$CFLAGS" \
      BUILDMODE=static XCFLAGS=-DLUAJIT_ENABLE_LUA52COMPAT FILE_T=luajit.exe \
      INSTALL_DEP=src/luajit.exe amalg install
-popd
-endgroup
-
-group "Building libsixel"
-$gitclone https://github.com/saitoha/libsixel.git
-pushd libsixel
-./configure --prefix="$FFBUILD_PREFIX" --host="$FFBUILD_TOOLCHAIN" --disable-shared \
-            --disable-{img2sixel,sixel2png,python} --without-{jpeg,libcurl,png}
-make -j"$(nproc)"
-make install
 popd
 endgroup
 
@@ -138,13 +128,13 @@ mpv_args=(
     -Dmujs:werror=false
     -Dmujs:default_library=static
     -Dlua=luajit
-    -D{amf,d3d11,iconv,javascript,lcms2,libarchive,libbluray,libcurl}=enabled
-    -D{shaderc,sixel,spirv-cross,subrandr,uchardet,vapoursynth,vulkan}=enabled
+    -D{d3d11,iconv,javascript,libarchive,libcurl}=enabled
+    -D{shaderc,spirv-cross,subrandr,uchardet}=enabled
     -D{win32-smtc,zimg}=enabled
 )
 if $gpl; then
     # Only the GPL image carries the dependencies of the GPL features.
-    mpv_args+=(-D{dvda,dvdnav,rubberband}=enabled)
+    mpv_args+=(-D{}=enabled)
 fi
 meson setup build "${mpv_args[@]}"
 meson compile -C build
@@ -159,8 +149,6 @@ mkdir -p artifact artifact-libmpv/include/mpv
 cp -p build/mpv.{exe,com} etc/mpv-*.bat "$license" artifact/
 cp -p build/libmpv*.dll build/libmpv*.dll.a "$license" artifact-libmpv/
 cp -p include/mpv/*.h artifact-libmpv/include/mpv/
-cp -p "$FFBUILD_PREFIX"/share/java/libbluray-*.jar artifact/
-cp -p "$FFBUILD_PREFIX"/share/java/libbluray-*.jar artifact-libmpv/
 "${FFBUILD_CROSS_PREFIX}strip" artifact/mpv.{exe,com} artifact-libmpv/libmpv*.dll
 ls -l artifact artifact-libmpv
 endgroup
