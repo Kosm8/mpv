@@ -1160,7 +1160,7 @@ static const struct MPOpts mp_default_opts = {
 
     .watch_later_options = (char *[]){
         "start",
-        "speed",
+        "pause",
         "pitch",
         "edition",
         "volume",
@@ -1182,7 +1182,7 @@ static const struct MPOpts mp_default_opts = {
         "sub-speed",
         "sub-pos",
         "sub-visibility",
-        "sub-scale",
+        "sub-font-size",
         "sub-use-margins",
         "sub-ass-force-margins",
         "sub-ass-use-video-data",
