@@ -1,13 +1,9 @@
 name: Cleanup caches
 
 on:
-  workflow_run:
+  workflow_dispatch:
     workflows: [build]
     types: [completed]
-
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
 
 permissions:
   actions: write
