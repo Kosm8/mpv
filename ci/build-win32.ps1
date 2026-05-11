@@ -7,33 +7,6 @@ if (-not (Test-Path $subprojects)) {
     New-Item -Path $subprojects -ItemType Directory | Out-Null
 }
 
-$amfVersion = "1.5.0"
-$amfUrl = "https://github.com/GPUOpen-LibrariesAndSDKs/AMF/releases/download/v$amfVersion/AMF-headers-v$amfVersion.tar.gz"
-$amfArchive = "AMF-headers-v$amfVersion.tar.gz"
-$amfExtractPath = "$subprojects/amf-headers"
-if (-not (Test-Path $amfArchive)) {
-    Invoke-WebRequest -Uri $amfUrl -OutFile $amfArchive
-}
-if (-not (Test-Path "$amfExtractPath/AMF")) {
-    New-Item -Path $amfExtractPath -ItemType Directory -Force | Out-Null
-    tar -xzf $amfArchive --strip-components=1 -C $amfExtractPath
-}
-$amfExtractPath = Resolve-Path $amfExtractPath
-
-$vapoursynthVersion = "80"
-$vapoursynthArchive = "vapoursynth-R$vapoursynthVersion.tar.gz"
-if (-not (Test-Path $vapoursynthArchive)) {
-    Invoke-WebRequest -Uri "https://github.com/vapoursynth/vapoursynth/archive/refs/tags/R$vapoursynthVersion.tar.gz" -OutFile $vapoursynthArchive
-}
-if (-not (Test-Path "$subprojects/vapoursynth/include")) {
-    New-Item -Path "$subprojects/vapoursynth" -ItemType Directory -Force | Out-Null
-    tar -xzf $vapoursynthArchive --strip-components=1 -C "$subprojects/vapoursynth" "vapoursynth-R$vapoursynthVersion/include"
-}
-Set-Content -Path "$subprojects/vapoursynth/meson.build" -Value @"
-project('vapoursynth', version: '$vapoursynthVersion')
-meson.override_dependency('vapoursynth', declare_dependency(include_directories: 'include'))
-"@
-
 # Wrap shaderc to run git-sync-deps and patch unsupported generator expression
 if (-not (Test-Path "$subprojects/shaderc_cmake")) {
     git clone https://github.com/google/shaderc --depth 1 $subprojects/shaderc_cmake
@@ -128,69 +101,6 @@ spirv_cross_c_dep = declare_dependency(dependencies: [
 meson.override_dependency('spirv-cross-c-shared', spirv_cross_c_dep)
 "@
 
-# Manually wrap Vulkan-Loader for UPDATE_DEPS option
-if (-not (Test-Path "$subprojects/vulkan")) {
-    New-Item -Path "$subprojects/vulkan" -ItemType Directory | Out-Null
-}
-Set-Content -Path "$subprojects/vulkan/meson.build" -Value @"
-project('vulkan', 'cpp', version: '1.3.285')
-cmake = import('cmake')
-opts = cmake.subproject_options()
-opts.add_cmake_defines({
-    'UPDATE_DEPS': 'ON',
-    'USE_GAS': 'ON',
-})
-opts.append_link_args(['-lcfgmgr32', '-Wl,/def:../subprojects/vulkan-loader/loader/vulkan-1.def'], target: 'vulkan')
-vulkan_proj = cmake.subproject('vulkan-loader', options: opts)
-vulkan_dep = vulkan_proj.dependency('vulkan')
-meson.override_dependency('vulkan', vulkan_dep)
-"@
-
-# Manually wrap libjxl for CMAKE_MSVC_RUNTIME_LIBRARY option
-if (-not (Test-Path "$subprojects/libjxl")) {
-    New-Item -Path "$subprojects/libjxl" -ItemType Directory | Out-Null
-}
-Set-Content -Path "$subprojects/libjxl/meson.build" -Value @"
-project('libjxl', 'cpp', version: '0.12.0')
-cmake = import('cmake')
-opts = cmake.subproject_options()
-opts.add_cmake_defines({
-    'CMAKE_MSVC_RUNTIME_LIBRARY': 'MultiThreaded',
-    'BUILD_SHARED_LIBS': 'OFF',
-    'BUILD_TESTING': 'OFF',
-})
-libjxl_proj = cmake.subproject('libjxl-cmake', options: opts)
-libjxl_dep = declare_dependency(dependencies: [
-    libjxl_proj.dependency('jxl'),
-    libjxl_proj.dependency('jxl_base'),
-    libjxl_proj.dependency('jxl_cms'),
-    libjxl_proj.dependency('hwy'),
-    libjxl_proj.dependency('brotlicommon'),
-    libjxl_proj.dependency('brotlidec'),
-    libjxl_proj.dependency('brotlienc'),
-])
-meson.override_dependency('libjxl', libjxl_dep)
-libjxl_threads_dep = libjxl_proj.dependency('jxl_threads')
-meson.override_dependency('libjxl_threads', libjxl_threads_dep)
-"@
-
-if (-not (Test-Path "$subprojects/aom")) {
-    New-Item -Path "$subprojects/aom" -ItemType Directory | Out-Null
-}
-Set-Content -Path "$subprojects/aom/meson.build" -Value @"
-project('aom', 'cpp', version: '3.13.1')
-cmake = import('cmake')
-opts = cmake.subproject_options()
-opts.add_cmake_defines({
-    'CMAKE_MSVC_RUNTIME_LIBRARY': 'MultiThreaded',
-    'BUILD_SHARED_LIBS': 'OFF',
-    'BUILD_TESTING': 'OFF',
-})
-aom_proj = cmake.subproject('aom-cmake', options: opts)
-aom_dep = aom_proj.dependency('aom')
-meson.override_dependency('aom', aom_dep)
-"@
-
 if (-not (Test-Path "$subprojects/subrandr")) {
     git clone https://github.com/afishhh/subrandr --depth 1 $subprojects/subrandr
     Set-Content -Path "$subprojects/subrandr/meson.build" -Value @"
@@ -278,22 +188,6 @@ $projects = @(
         URL = "https://github.com/KhronosGroup/SPIRV-Cross"
         Revision = "main"
         Method = "cmake"
-    },
-    @{
-        Path = "$subprojects/vulkan-loader.wrap"
-        URL = "https://github.com/KhronosGroup/Vulkan-Loader"
-        Revision = "main"
-        Method = "cmake"
-    },
-    @{
-        Path = "$subprojects/libjxl-cmake.wrap"
-        URL = "https://github.com/libjxl/libjxl"
-        Revision = "main"
-    },
-    @{
-        Path = "$subprojects/aom-cmake.wrap"
-        URL = "https://aomedia.googlesource.com/aom"
-        Revision = "main"
     }
 )
 
@@ -318,23 +212,23 @@ clone-recursive = true
 meson setup build `
     --wrap-mode=forcefallback `
     -Ddefault_library=static `
-    -Dc_args="-I$amfExtractPath" `
+    -Dc_args="" `
     -Dlibmpv=false `
-    -Dtests=true `
+    -Dtests=false `
     -Dgpl=true `
     -Dffmpeg:gpl=enabled `
-    -Dffmpeg:tests=enabled `
-    -Dffmpeg:programs=enabled `
+    -Dffmpeg:tests=disabled `
+    -Dffmpeg:programs=disabled `
     -Dffmpeg:sdl2=disabled `
-    -Dffmpeg:vulkan=auto `
+    -Dffmpeg:vulkan=disabled `
     -Dffmpeg:libdav1d=enabled `
-    -Dffmpeg:libjxl=enabled `
-    -Dffmpeg:libaom=enabled `
+    -Dffmpeg:libjxl=disabled `
+    -Dffmpeg:libaom=disabled `
     -Dharfbuzz:freetype=enabled `
     -Dlcms2:fastfloat=true `
     -Dlcms2:jpeg=disabled `
     -Dlcms2:tiff=disabled `
-    -Dlibass:test=enabled `
+    -Dlibass:test=disabled `
     -Dlibjpeg-turbo:tests=disabled `
     -Dlibusb:tests=false `
     -Dlibusb:examples=false `
@@ -342,17 +236,16 @@ meson setup build `
     -Dlibplacebo:lcms=enabled `
     -Dlibplacebo:shaderc=enabled `
     -Dlibplacebo:tests=false `
-    -Dlibplacebo:vulkan=enabled `
+    -Dlibplacebo:vulkan=disabled `
     -Dlibplacebo:d3d11=enabled `
     -Dlibpsl:tests=false `
     -Dxxhash:inline-all=true `
     -Dxxhash:cli=false `
     -Dluajit:amalgam=true `
-    -Damf=enabled `
+    -Damf=disabled `
     -Dd3d11=enabled `
     -Dsubrandr=enabled `
-    -Dvapoursynth=enabled `
-    -Dvulkan=enabled `
+    -Dvulkan=disabled `
     -Djavascript=enabled `
     -Dwin32-smtc=enabled `
     -Dlua=luajit `
@@ -362,6 +255,5 @@ meson setup build `
     -Dwayland=disabled `
     -Dx11=disabled
 ninja -C build mpv.exe mpv.com
-cp ./build/subprojects/vulkan-loader/vulkan.dll ./build/vulkan-1.dll
 cp ./etc/mpv-*.bat ./build
 ./build/mpv.com -v --no-config
