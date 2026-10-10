@@ -224,7 +224,7 @@ meson setup build `
     -Dffmpeg:devices=disabled `
     -Dffmpeg:bsfs=disabled `
     -Dffmpeg:encoders=disabled `
-    -Dffmpeg:demuxer-matroska=disabled `
+    -Dffmpeg:matroska=disabled `
     -Dffmpeg:sdl2=disabled `
     -Dffmpeg:vulkan=disabled `
     -Dffmpeg:libdav1d=enabled `
