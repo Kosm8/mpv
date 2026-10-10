@@ -219,7 +219,6 @@ meson setup build `
     -Dffmpeg:gpl=enabled `
     -Dffmpeg:tests=disabled `
     -Dffmpeg:programs=disabled `
-    -Dffmpeg:debug=disabled `
     -Dffmpeg:avdevice=disabled `
     -Dffmpeg:muxers=disabled `
     -Dffmpeg:devices=disabled `
