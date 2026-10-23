@@ -61,7 +61,7 @@ exe_wrapper = 'wine'
 [host_machine]
 system = 'windows'
 cpu_family = '${fam}'
-cpu = '${TARGET%%-*}'
+cpu = 'core2'
 endian = 'little'
 EOF
 
@@ -69,7 +69,7 @@ EOF
 cmake_args=(
     -Wno-dev
     -GNinja
-    -DCMAKE_SYSTEM_PROCESSOR="${fam}"
+    -DCMAKE_SYSTEM_PROCESSOR=core2
     -DCMAKE_SYSTEM_NAME=Windows
     -DCMAKE_FIND_ROOT_PATH="$PKG_CONFIG_SYSROOT_DIR"
     -DCMAKE_RC_COMPILER="${TARGET}-windres"
